@@ -15,7 +15,6 @@ from ibm_cloud_sdk_core.authenticators import IAMAuthenticator
 # Base de datos
 from chatblah.models import Productos
 from chatblah.models import Pedidos
-from chatblah.models import Sesiones
 
 # Apikey
 API_KEY = os.getenv('API_KEY')

@@ -12,6 +12,3 @@ class Pedidos(models.Model):
 	email=models.EmailField()
 	telefono=models.CharField(max_length=16)
 	direccion=models.CharField(max_length=150)
-
-class Sesiones(models.Model):
-	identificador=models.CharField(max_length=40)

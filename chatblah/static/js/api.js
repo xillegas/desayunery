@@ -40,7 +40,7 @@ var Api = (function() {
       if (http.readyState === XMLHttpRequest.DONE) {
         let res = JSON.parse(http.response);
         sessionId = res.result;
-        console.log(res);
+        //console.log(res);
         callback();
       }
     };
@@ -54,12 +54,18 @@ var Api = (function() {
     var payloadToWatson = {
       session_id: sessionId
     };
-    //console.log(payloadToWatson);
+    console.log(messageEndpoint['context']);
     payloadToWatson.input = {
       message_type: 'text',
       text: text,
     };
+    payloadToWatson.context = {}
 
+    var payloadresponse = Api.getResponsePayload();
+    if (payloadresponse !== undefined && payloadresponse.context !== undefined) {
+      payloadToWatson.context = payloadresponse["context"];
+    }
+    console.log("PAY LOAD A WATSON: ", payloadToWatson);
 
     // Built http request
     var http = new XMLHttpRequest();

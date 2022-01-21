@@ -1,2 +1,5 @@
 # Ignora los archivos relacionados a API keys
 .env
+
+# Ignora vscode
+.vscode

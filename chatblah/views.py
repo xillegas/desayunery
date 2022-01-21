@@ -1,3 +1,4 @@
+# Bibliotecas para Python
 import json
 import os
 from dotenv import load_dotenv
@@ -16,7 +17,7 @@ from chatblah.models import Productos
 from chatblah.models import Pedidos
 from chatblah.models import Sesiones
 
-#apikey
+# Apikey
 API_KEY = os.getenv('API_KEY')
 authenticator = IAMAuthenticator(API_KEY)
 assistant = AssistantV2(
@@ -27,86 +28,78 @@ assistant = AssistantV2(
 # URL del servicio
 assistant.set_service_url('https://api.us-south.assistant.watson.cloud.ibm.com/instances/f8645673-ac5f-480d-be7a-12046e73996a')
 
-# Asunto de SSL
-#assistant.set_disable_ssl_verification(True)
-
-# Crear la sesion
-#  Se utiliza una sesión para enviar la entrada del usuario
-# a un conocimiento y recibir respuestas.
-#  También mantiene el estado de la conversación.
 ASSISTANT_ID = os.getenv('ASSISTANT_ID')
-def crear_sesion_watson():
-    response = assistant.create_session(
-        assistant_id=ASSISTANT_ID
-        ).get_result()
 
-    Sesiones.objects.create(identificador=response['session_id'])
-    return 'OK'
+# Imprimir datos en consola
+# Muestra en la consola de Django los JSON de un mensaje
+def p_consola(mensaje_json, origen=""):
+    print(f'**********{origen}**********')
+    print(json.dumps(mensaje_json, indent=2))
+    print('=======================================')
 
-# Enviar entrada de usuario al asistente
-#  y recibir una respuesta, con estado de conversación
-# (incluyendo datos de contexto) almacenado por Watson
-# Assistant durante el tiempo de duración de la sesión.
+# Envía el mensaje y el contexto de la conversación
 def enviar_a_watson(mensaje):
-    mensaje['options'] = {
+    mensaje['input']['options'] = {
         'return_context': True
     }
-    mi_sesion = Sesiones.objects.values().first()
-    session_id = mi_sesion['identificador']
-    response = assistant.message(
+    p_consola(mensaje,"De Django para Watson")
+    response = assistant.message_stateless(
         assistant_id=ASSISTANT_ID,
-        session_id=session_id,
-        input=mensaje
+        input=mensaje['input'],
+        context=mensaje['context'] if 'context' in mensaje else {}
     ).get_result()
+    p_consola(response,"De Watson para Django")
     return response
 
-#print(json.dumps(response, indent=2))
-
+# Renderiza la página principal
 def saludo(request):
-    Sesiones.objects.all().delete()
-    crear_sesion_watson()
     return render(request,'index.html')
 
+# Sesión de Watson
+# función en desuso, borrarla requiere mantenimiento en javascript
 def mi_sesion(request):
-    mi_sesion = Sesiones.objects.values().first()
-    session_id = mi_sesion['identificador']
     datos = {
-        'result': session_id,
+        'result': '',
     }
     return JsonResponse(datos)
 
+# Realiza consulta de datos en caso de que así lo requiera el contexto
 def consultas_db(respuesta_watson):
-    # if Existe una descripción de producto
-    if respuesta_watson['output']['generic'][0]['text'].find('[VARIABLE_DESC') != -1:
-        # Consulta en DB y reescribe la respuesta de Watson
-        nombre_producto = respuesta_watson['output']['entities'][0]['value'].capitalize()
-        mi_prod = Productos.objects.filter(nombre=nombre_producto)
-        respuesta_watson['output']['generic'][0]['text'] = 'Ofrecemos ' + mi_prod[0].descripcion + ' por tan solo ' + str(mi_prod[0].precio) + ' Bs.'
+    context_cliente = respuesta_watson['context']['skills']['main skill']
+    if 'user_defined' in context_cliente:
+        context_cliente = context_cliente['user_defined']
+        # if hay que dar una descripción de producto
+        if "dar_descripcion" in context_cliente and context_cliente["dar_descripcion"] == 1:
+            context_cliente["dar_descripcion"] = 0
+            # Consulta en DB y reescribe la respuesta de Watson
+            for entidad in respuesta_watson['output']['entities']:
+                if entidad['entity'] == 'producto':
+                    nombre_producto = entidad['value'].capitalize()
+            mi_prod = Productos.objects.filter(nombre=nombre_producto)
 
-    # Caso donde la descripción del producto no está en el primer mensaje
-    if respuesta_watson['output']['generic'][0]['text'].find('Sí, tenemos') != -1:
-        for entidad in respuesta_watson['output']['entities']:
-            if entidad['entity'] == 'producto':
-                nombre_producto = entidad['value'].capitalize()
-        mi_prod = Productos.objects.filter(nombre=nombre_producto)
-        respuesta_watson['output']['generic'][1]['text'] = 'Ofrecemos ' + mi_prod[0].descripcion + ' por tan solo ' + str(mi_prod[0].precio) + ' Bs.'
+            descripcion_precio = 'Ofrecemos ' + mi_prod[0].descripcion + ' por tan solo ' + str(mi_prod[0].precio) + ' Bs.'
 
-    # if Cliente termina de comprar:
-    if 'Excelente, su compra es' in respuesta_watson['output']['generic'][0]['text']:
-        # Crea instancia de Pedidos con la sesion actual
-        ped_cliente = respuesta_watson['context']['skills']['main skill']['user_defined']
-        pedido=Pedidos(objeto=ped_cliente['objeto_de_interes'],cantidad=ped_cliente['cantidad'],email=ped_cliente['correo_cliente'],telefono=ped_cliente['tlf_cliente'],direccion=ped_cliente['dir_cliente'])
-        pedido.save()
+            for burbuja in respuesta_watson['output']['generic']:
+                p_consola(burbuja, 'burbuja')
+                if 'text' in burbuja and burbuja['text'].find('VARIABLE') != -1:
+                    burbuja['text'] = descripcion_precio
+
+        # if Cliente termina de comprar:
+        if 'Excelente, su compra es' in respuesta_watson['output']['generic'][0]['text']:
+            # Crea instancia de Pedidos con la sesion actual
+            pedido=Pedidos(objeto=context_cliente['objeto_de_interes'],cantidad=context_cliente['cantidad'],email=context_cliente['correo_cliente'],telefono=context_cliente['tlf_cliente'],direccion=context_cliente['dir_cliente'])
+            pedido.save()
 
     return respuesta_watson
 
+# Flujo de mensaje desde el usuario a Watson y su retorno a Javascript
 @csrf_exempt
 def mi_mensaje(request):
     mi_respuesta = {}
     if request.method == 'POST':
         mensaje=json.loads(request.body)
-
-        mi_respuesta = enviar_a_watson(mensaje['input'])
+        p_consola(mensaje,"Javascript")
+        mi_respuesta = enviar_a_watson(mensaje)
 
         mi_nueva_respuesta = consultas_db(mi_respuesta)
     return JsonResponse(mi_nueva_respuesta)

@@ -23,7 +23,18 @@ div {
 }
 
 .caja-chat {
-  height: 90vh;
+  height: 100vh;
+}
+
+@media (max-width: 540px) {
+  /* For a screen < 540px, this CSS will be read */
+  .super-container {
+    display:inherit;
+  }
+
+  .caja-chat {
+    height: 48vh;
+  }
 }
 
 .disclaimer {
@@ -185,7 +196,7 @@ div {
   border-top-right-radius: 1.25rem;
 }
 
-.from-watson, 
+.from-watson,
 .message-inner {
   position: relative;
   border-radius: 1.5625rem;
@@ -348,10 +359,6 @@ html{
 @media only screen and (max-width: 600px) {
   html {
     font-size: 14px;
-  }
-
-  .chat-column {
-    padding-top: 4rem;
   }
 
   #payload-column {
